@@ -1,0 +1,11 @@
+# Bagging Prediction
+
+## Setups:
+
+   1. Baseline: no group bagging and individual bagging (Foder: Bagging_prediction_Results_Big_Setup, Group_BS:0 and TS_BS:0)
+   2. Big run: group bagging + individual bagging (Foder: Bagging_prediction_Results_Big_Setup)
+   3. Individual bagging only: 
+   3. Group bagging only:
+   4. Group bagging with one individual bagging.
+
+### Notes: Each of the above setup has 5, 10, 30, and 60 minuets. 
