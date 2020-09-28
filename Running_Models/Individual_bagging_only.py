@@ -178,6 +178,34 @@ def svr_feature(datax,datay,thres,outfolder,postfix):
         #print(np.corrcoef(y_predict,y_test)[0,1])
         np.savetxt(outfolder+'/Train_real_randomTTS_' + str(rs) + postfix+'.txt',y_train)
 
+def svr_feature_parallel(datax,datay,thres,outfolder,postfix,rs):
+
+    print(rs)
+    # split train and testing. save the index to apply to others.
+    X_train, X_test, y_train, y_test,indices_train,indices_test = train_test_split(datax, datay,range(0,datax.shape[0]), test_size=0.2, random_state=rs)
+
+    # only select the most significant 5% of features/edges
+    X_train,select_index=feature_selection(X_train,y_train,thres)
+    X_test=X_test[:,select_index]
+
+    regr = make_pipeline(StandardScaler(), SVR(C=10, epsilon=0.1))
+    #regr = make_pipeline(SVR(C=1.0, epsilon=0.1))
+    regr.fit(X_train, y_train)
+
+    y_predict=regr.predict(X_test)
+    np.savetxt(outfolder+'/Test_predict_randomTTS_' + str(rs) + postfix+'.txt',y_predict)
+    #print(np.mean(np.abs(y_predict-y_test)))
+    #print(np.corrcoef(y_predict,y_test)[0,1])
+    np.savetxt(outfolder+'/Test_real_randomTTS_' + str(rs) + postfix+'.txt',y_test)
+
+    # predict on train
+    y_predict_train=regr.predict(X_train)
+    np.savetxt(outfolder+'/Train_predict_randomTTS_' + str(rs) + postfix+'.txt',y_predict_train)
+    #print(np.mean(np.abs(y_predict-y_test)))
+    #print(np.corrcoef(y_predict,y_test)[0,1])
+    np.savetxt(outfolder+'/Train_real_randomTTS_' + str(rs) + postfix+'.txt',y_train)
+
+
 def feature_selection(x,y,percent):
     corr_base=[]
     for i in range(x.shape[1]):
@@ -212,6 +240,26 @@ def ts_bootstrap_svr(data,pheno,ts_seed,datapath):
         os.makedirs(outfolder)
     svr_feature(dataall_bagging,pheno['Age_in_Yrs'],0.05,outfolder,'')
 
+
+def Subject_Time_series_Bootstrapping_aggerate(data,subidx):
+    dim1=data.shape[1]/998
+    dim2=998
+
+    #dataall_bagging=np.zeros(shape=(data.shape[0],998*997/2))
+    print(subidx)
+    subdata=data[subidx,:]
+    subdata=subdata.reshape((dim1,dim2))
+    block_size=np.int(np.floor(np.sqrt(subdata.shape[0]))) # for time series bootstrap
+
+    for ts_seed in range(1,(num_tsb+1)):
+        if ts_seed == 1:
+            tmp=timeseries_bootstrap(subdata, block_size, ts_seed)
+        else:
+            tmp=tmp + timeseries_bootstrap(subdata, block_size, ts_seed)
+    tmp = tmp/float(num_tsb)
+
+    return tmp
+
 # load in pheno
 pheno_file='/home/ec2-user/saveddata/HCP_1_Openaccess_demoinfo.csv'
 pheno_orig=pd.read_csv(pheno_file)
@@ -228,11 +276,11 @@ pheno_orig['Subject']=pheno_orig['Subject'].apply(str)
 group_bagging=True
 ts_bagging=True
 
-Aggregate_type='Prediction'
+Aggregate_type='FC'
 
 num_tsb=100
 num_grb=0
-num_jobs=60
+num_jobs=50
 
 outpath='/home/ec2-user/Results_TS_BS_only/'
 
@@ -244,15 +292,20 @@ for timeduration in [60,30,10,5]:
     # load the pre-saved data and sublist
     # /data3/aki/bagging_prediction/saveddata/time_duraiton_5.npy
     print('Loadign the data')
-    data_orig=load(dataprefix+'/memmap'+str(timeduration),mmap_mode='r')
+    #data_orig=load(dataprefix+'/memmap'+str(timeduration),mmap_mode='r')
+
+    data_filename_memmap = '/home/ec2-user/saveddata/memmap' + str(timeduration)
+    data = load(data_filename_memmap, mmap_mode='r')
+
+
     suball=np.load('/home/ec2-user/saveddata/final_sublist_new.npy')
-    data_orig=data_orig[0:len(suball),:]
+    #data_orig=data_orig[0:len(suball),:]
     print('data loading done')
     if group_bagging == True and ts_bagging==True:
         for gb in range(0,1):# group/subjects bagging 100 times, this gb is the seed for bootstrap
             print('group bagging:' + str(gb))
             if gb ==0:
-                data=data_orig
+                #data=data_orig
                 sublist=suball
             else:
                 sublist=standard_bootstrap_orig(suball, gb)
@@ -271,28 +324,32 @@ for timeduration in [60,30,10,5]:
             tsb=1
             print('start bootstraap_svr')
             #ts_bootstrap_svr(data,pheno,tsb,outfolder)
+            
 
 
 
-            folder = './joblib_memmap'
-            if not os.path.isdir(folder):
-                os.mkdir(folder)
-
-            else:
-                print('_____________________Stop.')
-            data_filename_memmap = os.path.join(folder, 'data_memmap')
-            dump(data, data_filename_memmap)
-            data = load(data_filename_memmap, mmap_mode='r')
-
-            #Parallel(n_jobs=num_jobs,backend="threading")(delayed(ts_bootstrap_svr)(data,pheno,tsb,outfolder) for tsb in range(1,(num_tsb+1)))
-            #Parallel(n_jobs=num_jobs)(delayed(ts_bootstrap_svr)(data,pheno,tsb,outfolder) for tsb in range(0,num_tsb+1))
-            Parallel(n_jobs=num_jobs)(delayed(ts_bootstrap_svr)(data,pheno,tsb,outfolder) for tsb in range(281,461))
 
 
-            '''
-            # do SVR on aggregated correlatiotn matrix,
-            Aggregate_type='FC'
-            outfolder=outtpath + '/time_duraiton_'+str(timeduration)+'_GroupBS_'+str(gb)+'_Aggregate_'+Aggregate_type
-            if not os.path.isdir(outfolder):
-                 os.makedirs(outfolder)
-            '''
+            if Aggregate_type == 'Prediction':
+                #Parallel(n_jobs=num_jobs,backend="threading")(delayed(ts_bootstrap_svr)(data,pheno,tsb,outfolder) for tsb in range(1,(num_tsb+1)))
+                #Parallel(n_jobs=num_jobs)(delayed(ts_bootstrap_svr)(data,pheno,tsb,outfolder) for tsb in range(0,num_tsb+1))
+                Parallel(n_jobs=num_jobs)(delayed(ts_bootstrap_svr)(data,pheno,tsb,outfolder) for tsb in range(281,461))
+
+
+            
+            # do SVR on aggregated correlation matrix,
+            if Aggregate_type =='FC':
+
+
+                dataall_bagging_tmp = Parallel(n_jobs=num_jobs)(delayed(Subject_Time_series_Bootstrapping_aggerate)(data,subidx) for subidx in range(0,data.shape[0]))  
+                dataall_bagging=np.zeros(shape=(data.shape[0],998*997/2))
+                for ii in range(0,dataall_bagging.shape[0]):
+                     dataall_bagging[ii,:]=dataall_bagging_tmp[ii]
+
+
+                outfolder=outpath +'/' + 'Aggregate_'+Aggregate_type +'/time_duraiton_'+str(timeduration)+'/GroupBS_'+str(gb)
+                if not os.path.isdir(outfolder):
+                    os.makedirs(outfolder)
+
+                Parallel(n_jobs=num_jobs)(delayed(svr_feature_parallel)(dataall_bagging,pheno['Age_in_Yrs'],0.05,outfolder,'',tts) for tts in range(1,51))
+
