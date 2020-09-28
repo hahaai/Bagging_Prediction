@@ -244,20 +244,24 @@ def ts_bootstrap_svr(data,pheno,ts_seed,datapath):
 def Subject_Time_series_Bootstrapping_aggerate(data,subidx):
     dim1=data.shape[1]/998
     dim2=998
-
+    TS_BS = True
     #dataall_bagging=np.zeros(shape=(data.shape[0],998*997/2))
     print(subidx)
     subdata=data[subidx,:]
     subdata=subdata.reshape((dim1,dim2))
     block_size=np.int(np.floor(np.sqrt(subdata.shape[0]))) # for time series bootstrap
 
-    for ts_seed in range(1,(num_tsb+1)):
-        if ts_seed == 1:
-            tmp=timeseries_bootstrap(subdata, block_size, ts_seed)
-        else:
-            tmp=tmp + timeseries_bootstrap(subdata, block_size, ts_seed)
-    tmp = tmp/float(num_tsb)
+    if TS_BS == True:
+        for ts_seed in range(1,(num_tsb+1)):
+            if ts_seed == 1:
+                tmp=timeseries_bootstrap(subdata, block_size, ts_seed)
+            else:
+                tmp=tmp + timeseries_bootstrap(subdata, block_size, ts_seed)
+        tmp = tmp/float(num_tsb)
 
+    if TS_BS == False:
+        data_corr=np.corrcoef(np.transpose(subdata))
+        tmp=upper_tri_indexing(data_corr)
     return tmp
 
 # load in pheno
@@ -346,6 +350,7 @@ for timeduration in [60,30,10,5]:
                 for ii in range(0,dataall_bagging.shape[0]):
                      dataall_bagging[ii,:]=dataall_bagging_tmp[ii]
 
+                np.save('Corr_matrix/Correlation_matrix_Base_'+str(timeduration)+'_min.npy',dataall_bagging)
 
                 outfolder=outpath +'/' + 'Aggregate_'+Aggregate_type +'/time_duraiton_'+str(timeduration)+'/GroupBS_'+str(gb)
                 if not os.path.isdir(outfolder):
