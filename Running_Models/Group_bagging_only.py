@@ -302,6 +302,10 @@ def group_bagging_func(data,pheno,subs,gb,datapath):
                 data_corr=np.corrcoef(np.transpose(subdata))
                 data_corr=upper_tri_indexing(data_corr)
                 dataall_bagging_x_test[ii,:]=data_corr
+            else:
+                block_size=np.int(np.floor(np.sqrt(subdata.shape[0]))) # for time series bootstrap
+                dataall_bagging_x_test[ii,:]=timeseries_bootstrap(subdata, block_size, ts_seed)
+
             ii += 1
 
         outfolder=datapath+'GroupBS-'+str(gb)
